@@ -4,7 +4,7 @@ import { supabase } from '../lib/supabase'
 import Layout from '../components/Layout'
 import { format, startOfMonth, endOfMonth, eachDayOfInterval, isSameMonth, isSameDay, parseISO, addMonths, subMonths } from 'date-fns'
 import { it } from 'date-fns/locale'
-import { ChevronLeft, ChevronRight, Clock, MapPin } from 'lucide-react'
+import { ChevronLeft, ChevronRight } from 'lucide-react'
 
 interface Shift {
   id: string

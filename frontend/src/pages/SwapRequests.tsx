@@ -4,7 +4,7 @@ import { supabase } from '../lib/supabase'
 import Layout from '../components/Layout'
 import { format, parseISO } from 'date-fns'
 import { it } from 'date-fns/locale'
-import { RefreshCw, Clock, Check, X, MessageCircle, AlertCircle, Plus } from 'lucide-react'
+import { RefreshCw, Clock, Check, X, AlertCircle } from 'lucide-react'
 
 interface ShiftSwap {
   id: string
@@ -91,7 +91,11 @@ export default function SwapRequests() {
     try {
       const { error } = await supabase
         .from('shift_swaps')
-        .update({ status: 'accepted_by_operator', swap_with_id: profile?.id })
+        // @ts-expect-error - Supabase type inference issue with update
+        .update({
+          status: 'accepted_by_operator',
+          swap_with_id: profile?.id || null
+        })
         .eq('id', swapId)
 
       if (error) throw error
@@ -106,6 +110,7 @@ export default function SwapRequests() {
     try {
       const { error } = await supabase
         .from('shift_swaps')
+        // @ts-expect-error - Supabase type inference issue with update
         .update({ status: 'rejected' })
         .eq('id', swapId)
 
@@ -123,6 +128,7 @@ export default function SwapRequests() {
     try {
       const { error } = await supabase
         .from('shift_swaps')
+        // @ts-expect-error - Supabase type inference issue with update
         .update({
           status: 'approved',
           approved_at: new Date().toISOString(),
@@ -233,7 +239,6 @@ export default function SwapRequests() {
           <div className="space-y-4">
             {swaps.map((swap) => {
               const isRequester = swap.requested_by_id === profile?.id
-              const isReceiver = swap.swap_with_id === profile?.id
               const canApprove = (profile?.role === 'admin' || profile?.role === 'supervisor') &&
                                  swap.status === 'accepted_by_operator'
 
