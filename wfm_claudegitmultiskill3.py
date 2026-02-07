@@ -3248,6 +3248,22 @@ def assegnazione_tight_capacity(
     print("\n[CLEAN]  PULIZIA FINALE - Riequilibrio weekend post-fill...")
     rebalance_weekends()
 
+    # FIX: SAFETY NET - Recupera dipendenti con giorni mancanti dopo i rebalance
+    # I rebalance possono creare violazioni se apply_assignment fallisce silenziosamente
+    # dopo che remove_assignment ha già decrementato days_done
+    short_emps = [emp for emp in ris['id dipendente'] if days_done[emp] < work_need[emp]]
+    if short_emps:
+        print(f"\n[SAFETY] Recupero {len(short_emps)} dipendenti con giorni mancanti...")
+        for emp in short_emps:
+            while days_done[emp] < work_need[emp]:
+                fallback_day, fallback_sid, used_final = pick_force_assignment(emp)
+                if fallback_sid is not None:
+                    print(f"   -> Recupero {emp}: +1 giorno ({fallback_day})")
+                    apply_assignment(emp, fallback_day, fallback_sid, forced=True, force_any_duration=used_final)
+                else:
+                    print(f"   [!]  Impossibile recuperare {emp} (giorni: {days_done[emp]}/{work_need[emp]})")
+                    break
+
     # ENFORCE CRITICAL COVERAGE viene eseguito DOPO fill_gap per dare priorità agli swap
     enforce_critical_coverage()
 
