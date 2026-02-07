@@ -1079,8 +1079,14 @@ def assegnazione_tight_capacity(
     demand_by_day = targets['demand_by_day']
     total_demand = targets['total_demand']
     overcapacity_ratio = targets['overcapacity_ratio']
-    uniform_overcap_active = uniform_overcap and overcapacity_ratio > 0
-    uniform_target_ratio = 1.0 + max(0.0, overcapacity_ratio)
+    # FIX: attiva bilanciamento uniforme anche in deficit di personale
+    # In deficit, il target diventa la copertura media raggiungibile (es. 0.85)
+    # così il meccanismo bilancia i giorni tra loro anziché mirare a un irraggiungibile 100%
+    uniform_overcap_active = uniform_overcap
+    if overcapacity_ratio > 0:
+        uniform_target_ratio = 1.0 + overcapacity_ratio
+    else:
+        uniform_target_ratio = max(0.70, 1.0 + overcapacity_ratio)
     day_weights = targets['day_weights']
     overcap_limit = targets.get('overcap_limit', {g: 0.0 for g in giorni})
     overcap_penalty = targets.get('overcap_penalty', {g: 1.0 for g in giorni})
@@ -1317,7 +1323,9 @@ def assegnazione_tight_capacity(
             return 0.0
         desired = day_weights.get(day, 0.0)
         actual = day_assignments_count[day] / total_assigned
-        scale = 140.0 if strict_phase else 70.0
+        # FIX: scale aumentato da 70-140 a 400-600 per rendere il bilanciamento
+        # giornaliero competitivo con lo score di copertura slot (~2000+ punti)
+        scale = 600.0 if strict_phase else 400.0
         return (desired - actual) * scale
 
     def weekend_bonus(emp: str, day: str, projected_overcap: float) -> float:
@@ -1778,8 +1786,10 @@ def assegnazione_tight_capacity(
                     day_current = sum(current_coverage[day].values())
                     coverage_ratio = day_current / day_demand if day_demand > 0 else 1.0
 
-                    # Bonus per giorno più scoperto + piccolo bonus weekend
-                    day_bonus = (1.0 - coverage_ratio) * 100
+                    # FIX: Bonus aumentato da 100 a 500 per rendere il bilanciamento
+                    # giornaliero competitivo con shift_value (~2000+)
+                    # Es: Ven 75.5% → bonus 122, Lun 94.5% → bonus 27 → diff 95 punti
+                    day_bonus = (1.0 - coverage_ratio) * 500
                     if day == 'Dom':
                         day_bonus += 20
                     elif day == 'Sab':
@@ -3069,7 +3079,9 @@ def assegnazione_tight_capacity(
             report_label = "giorni"
         else:
             rebalance_days = ['Lun', 'Mar', 'Mer', 'Gio', 'Ven']
-            diff_target = 0.3
+            # FIX: soglia ridotta da 0.3 a 0.12 per intercettare squilibri reali
+            # (es. PS Lun 94.5% vs Ven 75.5% = diff 19%, prima ignorato)
+            diff_target = 0.12
             report_label = "infrasettimanale"
 
         for iteration in range(max_iter):
