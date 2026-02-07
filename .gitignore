@@ -2,3 +2,5 @@ __pycache__/
 *.pyc
 risultato_unificato_week_10_v2.xlsx
 risultato_unificato_week_10_v3.xlsx
+build/
+dist/
