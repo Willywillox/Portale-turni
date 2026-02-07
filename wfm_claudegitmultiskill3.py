@@ -1323,9 +1323,9 @@ def assegnazione_tight_capacity(
             return 0.0
         desired = day_weights.get(day, 0.0)
         actual = day_assignments_count[day] / total_assigned
-        # FIX: scale aumentato da 70-140 a 400-600 per rendere il bilanciamento
-        # giornaliero competitivo con lo score di copertura slot (~2000+ punti)
-        scale = 600.0 if strict_phase else 400.0
+        # FIX: scale aumentato da 70-140 a 200-300 per rendere il bilanciamento
+        # giornaliero significativo senza sovrastare lo score di copertura slot
+        scale = 300.0 if strict_phase else 200.0
         return (desired - actual) * scale
 
     def weekend_bonus(emp: str, day: str, projected_overcap: float) -> float:
@@ -1786,10 +1786,9 @@ def assegnazione_tight_capacity(
                     day_current = sum(current_coverage[day].values())
                     coverage_ratio = day_current / day_demand if day_demand > 0 else 1.0
 
-                    # FIX: Bonus aumentato da 100 a 500 per rendere il bilanciamento
-                    # giornaliero competitivo con shift_value (~2000+)
-                    # Es: Ven 75.5% → bonus 122, Lun 94.5% → bonus 27 → diff 95 punti
-                    day_bonus = (1.0 - coverage_ratio) * 500
+                    # FIX: Bonus aumentato da 100 a 250 per influenzare la scelta
+                    # giornaliera senza sovrastare lo shift_value (~2000+)
+                    day_bonus = (1.0 - coverage_ratio) * 250
                     if day == 'Dom':
                         day_bonus += 20
                     elif day == 'Sab':
@@ -3095,19 +3094,40 @@ def assegnazione_tight_capacity(
                 else:
                     day_ratios[day] = 1.0
 
-            # Trova giorno più sovra-coperto
-            most_over = max(day_ratios.keys(), key=lambda d: day_ratios[d])
-            max_ratio = day_ratios[most_over]
+            # FIX: Cerca la coppia più sbilanciata che non sia già fallita
+            sorted_over = sorted(day_ratios.keys(), key=lambda d: day_ratios[d], reverse=True)
+            sorted_under = sorted(day_ratios.keys(), key=lambda d: day_ratios[d])
+            found_pair = False
+            most_over = None
+            most_under = None
+            for over_day in sorted_over:
+                for under_day in sorted_under:
+                    if over_day == under_day:
+                        continue
+                    pair_diff = day_ratios[over_day] - day_ratios[under_day]
+                    if pair_diff < diff_target:
+                        break  # coppie successive ancora meno sbilanciate
+                    if ("__pair__", over_day, under_day) not in failed_swaps:
+                        most_over = over_day
+                        most_under = under_day
+                        found_pair = True
+                        break
+                if found_pair:
+                    break
 
-            # Trova giorno più sotto-coperto
-            most_under = min(day_ratios.keys(), key=lambda d: day_ratios[d])
-            min_ratio = day_ratios[most_under]
-
-            # Se differenza < soglia, stop (bilanciamento accettabile)
-            diff = max_ratio - min_ratio
-            if diff < diff_target:
-                print(f"   [OK] Bilanciamento accettabile (max diff: {diff:.1%})")
+            if not found_pair:
+                max_ratio = max(day_ratios.values())
+                min_ratio = min(day_ratios.values())
+                diff = max_ratio - min_ratio
+                if diff < diff_target:
+                    print(f"   [OK] Bilanciamento accettabile (max diff: {diff:.1%})")
+                else:
+                    print(f"   [!]  Nessuna coppia swap disponibile (diff residua: {diff:.1%})")
                 break
+
+            max_ratio = day_ratios[most_over]
+            min_ratio = day_ratios[most_under]
+            diff = max_ratio - min_ratio
 
             print(f"   Iter {iteration+1}: {most_over} {max_ratio:.0%} -> {most_under} {min_ratio:.0%} (diff: {diff:.1%})")
 
@@ -3186,7 +3206,9 @@ def assegnazione_tight_capacity(
 
             if not candidates:
                 print(f"   [!]  Impossibile swap {most_over}->{most_under} (nessun candidato)")
-                break
+                # FIX: segna la coppia come fallita e riprova con altra coppia
+                failed_swaps.add(("__pair__", most_over, most_under))
+                continue
 
             # Prendi migliore candidato (massimo beneficio, mantiene più copertura)
             candidates.sort(reverse=True)
